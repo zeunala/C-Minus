@@ -11,7 +11,7 @@
 
 /* states in scanner DFA */
 typedef enum
-   { START,INASSIGN,INCOMMENT,INNUM,INID,DONE }
+   { START,INASSIGN,INCOMMENT,INNUM,INID,DONE,INEQ,INLT,INGT,INNE,INOVER,INCOMMENT_ }
    StateType;
 
 /* lexeme of identifier or reserved word */
@@ -56,9 +56,9 @@ static struct
     { char* str;
       TokenType tok;
     } reservedWords[MAXRESERVED]
-   = {{"if",IF},{"then",THEN},{"else",ELSE},{"end",END},
-      {"repeat",REPEAT},{"until",UNTIL},{"read",READ},
-      {"write",WRITE}};
+   = {{"if",IF},{"else",ELSE},{"while",WHILE},
+      {"return",RETURN},{"int",INT},
+      {"void",VOID}};
 
 /* lookup an identifier to see if it is a reserved word */
 /* uses linear search */
@@ -94,13 +94,21 @@ TokenType getToken(void)
            state = INNUM;
          else if (isalpha(c))
            state = INID;
-         else if (c == ':')
-           state = INASSIGN;
          else if ((c == ' ') || (c == '\t') || (c == '\n'))
            save = FALSE;
-         else if (c == '{')
+
+         // <=, >=, ==, !=, /* */ 에 대한 처리 
+         else if (c == '<')
+           state = INLT; // <인지 <=인지 구분 필요
+         else if (c == '>')
+           state = INGT; // >인지 >=인지 구분 필요
+         else if (c == '=')
+           state = INEQ; // =인지 ==인지 구분 필요
+         else if (c == '!')
+           state = INNE; // !=인지 잘못입력된 !인지 구분 필요
+         else if (c == '/')
          { save = FALSE;
-           state = INCOMMENT;
+           state = INOVER; // /인지 /* */인지 구분 필요
          }
          else
          { state = DONE;
@@ -109,12 +117,7 @@ TokenType getToken(void)
                save = FALSE;
                currentToken = ENDFILE;
                break;
-             case '=':
-               currentToken = EQ;
-               break;
-             case '<':
-               currentToken = LT;
-               break;
+             // 기존에 있던 =, <, / 삭제 (새로 추가된 <= 등과 구분한 뒤 처리해야하기 때문)
              case '+':
                currentToken = PLUS;
                break;
@@ -123,9 +126,6 @@ TokenType getToken(void)
                break;
              case '*':
                currentToken = TIMES;
-               break;
-             case '/':
-               currentToken = OVER;
                break;
              case '(':
                currentToken = LPAREN;
@@ -136,31 +136,29 @@ TokenType getToken(void)
              case ';':
                currentToken = SEMI;
                break;
+             // C-Minus에서 사용하는 symbol 추가
+             case '[':
+               currentToken = LCURLY;
+               break;
+             case ']':
+               currentToken = RCURLY;
+               break;
+             case '{':
+               currentToken = LBRACE;
+               break;
+             case '}':
+               currentToken = RBRACE;
+               break;
+             case ',':
+               currentToken = COMMA;
+               break;
              default:
                currentToken = ERROR;
                break;
            }
          }
          break;
-       case INCOMMENT:
-         save = FALSE;
-         if (c == EOF)
-         { state = DONE;
-           currentToken = ENDFILE;
-         }
-         else if (c == '}') state = START;
-         break;
-       case INASSIGN:
-         state = DONE;
-         if (c == '=')
-           currentToken = ASSIGN;
-         else
-         { /* backup in the input */
-           ungetNextChar();
-           save = FALSE;
-           currentToken = ERROR;
-         }
-         break;
+
        case INNUM:
          if (!isdigit(c))
          { /* backup in the input */
@@ -179,6 +177,88 @@ TokenType getToken(void)
            currentToken = ID;
          }
          break;
+       // 추가되는 부분 (기존에 있던 case INASSIGN:과 유사한 구조로 작성)
+       case INLT: // <인지 <=인지 구분
+         state = DONE;
+         if (c == '=')
+           currentToken = LE;
+         else
+         {
+           ungetNextChar();
+           currentToken = LT;
+         }
+         break;
+       case INGT: // >인지 >=인지 구분
+         state = DONE;
+         if (c == '=')
+           currentToken = GE;
+         else
+         {
+           ungetNextChar();
+           currentToken = GT;
+         }
+         break;
+       case INEQ: // =인지 ==인지 구분
+         state = DONE;
+         if (c == '=')
+           currentToken = EQ;
+         else
+         {
+           ungetNextChar();
+           currentToken = ASSIGN;
+         }
+         break;
+       case INNE: // !=인지 잘못입력된 !인지 구분
+         state = DONE;
+         if (c == '=')
+           currentToken = NE;
+         else
+         {
+           currentToken = ERROR;
+         }
+         break;
+       case INOVER: // /인지 /* */인지 구분
+         if (c == '*')
+         {
+           save = FALSE;
+           state = INCOMMENT;
+         }
+         else
+         {
+           ungetNextChar();
+           currentToken = OVER;
+           state = DONE;
+         }
+         break;
+       case INCOMMENT: // /* 안에 들어와있는 상태에서 *만났는지 확인 (기본 동작은 기존에 있던 case INCOMMENT:를 참고함)
+         save = FALSE;
+         if (c == EOF)
+         {
+           state = DONE;
+           currentToken = ENDFILE;
+         }
+         else if (c == '*')
+         {
+           state = INCOMMENT_;
+         }
+         break;
+       case INCOMMENT_: // /* 안에서 *만났을 때 뒤에 /까지 있어 주석이 끝나는지 확인
+         save = FALSE;
+         if (c == EOF)
+         {
+           state = DONE;
+           currentToken = ENDFILE;
+         }
+         else if (c == '/')
+         {
+           state = START;
+         }
+         else // 그냥 주석 안에 *만 나온 경우
+         {
+           state = INCOMMENT;
+         }
+         break;
+      
        case DONE:
        default: /* should never happen */
          fprintf(listing,"Scanner Bug: state= %d\n",state);

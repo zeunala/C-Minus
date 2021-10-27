@@ -169,7 +169,7 @@ TokenType getToken(void)
          }
          break;
        case INID:
-         if (!isalpha(c))
+         if (!isalpha(c) && !isdigit(c)) // identifier에서 letter이후 숫자도 나올 수 있기에 수정
          { /* backup in the input */
            ungetNextChar();
            save = FALSE;

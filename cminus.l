@@ -51,9 +51,10 @@ whitespace  [ \t]+
 {identifier}    {return ID;}
 {newline}       {lineno++;}
 {whitespace}    {/* skip whitespace */}
-"/*"            { char c;
+"/*"            { char c = '0';
                   do
-                  { c = input();
+                  { if (c != '*') c = input();
+
                     if (c == EOF) break;
                     if (c == '\n') lineno++;
                     if (c == '*')

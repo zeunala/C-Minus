@@ -253,6 +253,10 @@ TokenType getToken(void)
          {
            state = START;
          }
+         else if (c == '*') // **/ 과 같이 주석이 끝나는 경우에 대한 처리
+         {
+           state = INCOMMENT_;
+         }
          else // 그냥 주석 안에 *만 나온 경우
          {
            state = INCOMMENT;
